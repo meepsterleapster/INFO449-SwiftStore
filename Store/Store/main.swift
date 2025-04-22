@@ -49,6 +49,14 @@ class ItemByWeight : SKU {
         return item.itemName
     }
     
+    func pricePerPound() -> Int {
+        return item.price
+    }
+    
+    func pounds() -> Int {
+        return item.pounds
+    }
+    
     func price() -> Int {
         return Int(item.pounds * item.price)
     }
@@ -105,11 +113,153 @@ class Receipt {
     
 }
 
+class Coupon {
+    var percentageOff : Double
+    var beenUsed : Bool
+    var itemName : String
+    
+    init(itemName : String, percentageOff: Double) {
+        self.percentageOff = percentageOff
+        self.itemName = itemName
+        self.beenUsed = false
+    }
+    
+    func applyCoupon (receipt: [SKU]) {
+        guard !beenUsed else { return }
+        for item in receipt{
+            if item.name == itemName{
+                item.changePrice(Int(percentageOff * Double(item.price())))
+                beenUsed = true
+                break
+            }
+        }
+    }
+}
+class RainCheck {
+    var itemName : String
+    var newPrice : Int
+    var beenRedeemed : Bool
+    var quantity : Int?
+    var offerWeight : Int?
+
+    convenience init(itemName: String, _ newPrice: Int) {
+        self.init(itemName: itemName, newPrice, quantity: 1, offerWeight: nil)
+        self.quantity = nil
+    }
+
+    init(itemName: String, _ newPrice: Int, quantity: Int?) {
+        self.itemName = itemName
+        self.newPrice = newPrice
+        self.quantity = quantity
+        self.offerWeight = nil
+        self.beenRedeemed = false
+    }
+
+    init(itemName: String, _ newPrice: Int, offerWeight: Int?) {
+        self.itemName = itemName
+        self.newPrice = newPrice
+        self.quantity = nil
+        self.offerWeight = offerWeight
+        self.beenRedeemed = false
+    }
+
+    private init(itemName: String, _ newPrice: Int, quantity: Int?, offerWeight: Int?) {
+        self.itemName = itemName
+        self.newPrice = newPrice
+        self.quantity = quantity
+        self.offerWeight = offerWeight
+        self.beenRedeemed = false
+    }
+
+    func applyRaincheck(Receipt : Receipt) {
+        var appliedSomething = false
+        
+        if var currentQty = quantity {
+            let initialQty = currentQty
+            guard currentQty > 0 else { return }
+            
+            for item in Receipt.receipt {
+                guard currentQty > 0 else { break }
+                
+                if item.name == itemName && !(item is ItemByWeight) {
+                    if item.price() > newPrice {
+                        item.changePrice(newPrice)
+                        currentQty -= 1
+                        appliedSomething = true
+                    }
+                }
+            }
+            self.quantity = currentQty
+            if currentQty == 0 && initialQty > 0 {
+                self.beenRedeemed = true
+            } else if appliedSomething && initialQty == 1 {
+                self.beenRedeemed = true
+            }
+            
+        } else if var currentWeight = offerWeight {
+            let initialWeight = currentWeight
+            guard currentWeight > 0 else { return }
+            
+            for item in Receipt.receipt {
+                guard currentWeight > 0 else { break }
+                
+                if let weightedItem = item as? ItemByWeight,
+                   weightedItem.name == itemName
+                {
+                    let itemWeight             = weightedItem.item.pounds
+                    let originalPricePerPound  = weightedItem.pricePerPound()
+                    
+                    guard originalPricePerPound > newPrice else { continue }
+                    
+                    if currentWeight >= itemWeight {
+                        weightedItem.changePrice(newPrice)
+                        currentWeight -= itemWeight
+                        appliedSomething = true
+                    } else {
+                        let discountedCost = currentWeight * newPrice
+                        let remaining      = itemWeight - currentWeight
+                        let normalCost     = remaining * originalPricePerPound
+                        let totalCost      = discountedCost + normalCost
+                        
+                        let avgPerPound = totalCost / itemWeight
+                        weightedItem.changePrice(avgPerPound)
+                        
+                        currentWeight = 0
+                        appliedSomething = true
+                    }
+                    
+                    break
+                }
+            }
+            
+            self.offerWeight = currentWeight
+            if currentWeight == 0 && initialWeight > 0 {
+                self.beenRedeemed = true
+            }
+        }else {
+            guard !beenRedeemed else { return }
+
+            for item in Receipt.receipt {
+                if item.name == itemName && !(item is ItemByWeight) {
+                    print(item.price())
+                    if item.price() > newPrice {
+                        item.changePrice(newPrice)
+                        print(item.price())
+                        self.beenRedeemed = true
+                        break
+                    }
+                }
+            }
+        }
+    }
+}
+
+
 class PricingScheme {
     
     // How do we modify a receipt?
     // init a pricing scheme?
-    
+    // I am going insane
     enum Value {
         
         case string(String)
